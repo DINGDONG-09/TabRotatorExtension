@@ -1,57 +1,92 @@
 let currentIndex = 0;
-let rotationTimer = null;
+const ALARM_NAME = 'tabRotation';
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Tab Rotator extension installed.');
-  chrome.storage.sync.get(['interval', 'enabled'], (data) => {
-    if (data.enabled) {
-      startRotation(data.interval || 30);
-    }
-  });
+  console.log('🚀 Tab Rotator extension installed.');
+  chrome.storage.local.set({ currentIndex: 0 }); // Initialize index
+  loadAndStartRotation();
 });
 
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.interval || changes.enabled || changes.urls) {
-    chrome.storage.sync.get(['interval', 'enabled'], (data) => {
-      console.log('Settings changed, restarting rotation');
-      stopRotation();
-      if (data.enabled) {
-        startRotation(data.interval || 30);
-      }
-    });
+chrome.runtime.onStartup.addListener(() => {
+  console.log('🔄 Browser started, checking rotation status...');
+  loadAndStartRotation();
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync') {
+    console.log('⚙️ Settings changed:', changes);
+    loadAndStartRotation();
   }
 });
 
-function startRotation(intervalSeconds) {
-  stopRotation(); // Clear any existing timer
+// Listen for alarm events
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM_NAME) {
+    rotateTabs();
+  }
+});
+
+function loadAndStartRotation() {
+  chrome.storage.sync.get(['seconds', 'enabled'], (data) => {
+    console.log('📥 Loaded settings:', data);
+    
+    const seconds = data.seconds || 5;
+    const enabled = data.enabled || false;
+    
+    stopRotation();
+    
+    if (enabled) {
+      startRotation(seconds);
+    } else {
+      console.log('❌ Rotation is disabled in settings');
+    }
+  });
+}
+
+function startRotation(seconds) {
+  stopRotation(); // Clear any existing alarm
   
-  console.log(`Starting rotation with ${intervalSeconds} second interval`);
+  // Ensure seconds is a valid number
+  seconds = parseInt(seconds, 10);
+  
+  if (isNaN(seconds) || seconds < 1) {
+    console.error('❌ Invalid seconds:', seconds);
+    return;
+  }
+  
+  console.log(`🟢 Starting rotation every ${seconds} seconds`);
+  
+  // Reset index when starting new rotation
+  chrome.storage.local.set({ currentIndex: 0 });
   
   // Run immediately first time
   rotateTabs();
   
-  // Then repeat at interval
-  rotationTimer = setInterval(() => {
-    rotateTabs();
-  }, intervalSeconds * 1000);
+  // Create alarm that repeats every X seconds
+  const periodInMinutes = seconds / 60;
+  
+  chrome.alarms.create(ALARM_NAME, {
+    periodInMinutes: Math.max(periodInMinutes, 1/60) // Minimum ~1 second
+  });
+  
+  console.log(`✅ Alarm created: switching tabs every ${seconds} seconds`);
 }
 
 function stopRotation() {
-  if (rotationTimer) {
-    clearInterval(rotationTimer);
-    rotationTimer = null;
-    console.log('Rotation stopped');
-  }
+  chrome.alarms.clear(ALARM_NAME, (wasCleared) => {
+    if (wasCleared) {
+      console.log('🔴 Rotation alarm cleared');
+    }
+  });
 }
 
 async function rotateTabs() {
-  console.log('\n=== ROTATION START ===');
+  const data = await chrome.storage.sync.get(['urls', 'enabled', 'seconds']);
   
-  const data = await chrome.storage.sync.get(['urls', 'enabled']);
-  console.log('Settings:', data);
+  console.log(`\n⏰ === ROTATION (every ${data.seconds || 5} seconds) ===`);
   
   if (!data.enabled) {
-    console.log('❌ Rotation is DISABLED');
+    console.log('❌ Rotation disabled, stopping...');
     stopRotation();
     return;
   }
@@ -59,29 +94,24 @@ async function rotateTabs() {
   const urls = data.urls || [];
   
   if (urls.length === 0) {
-    console.log('❌ No URLs configured in settings');
+    console.log('⚠️ No URLs configured');
     return;
   }
 
-  console.log(`✓ Found ${urls.length} configured URLs`);
+  console.log(`📋 Configured URLs: ${urls.length}`);
 
   // Get all tabs
   const tabs = await chrome.tabs.query({ currentWindow: true });
-  console.log(`✓ Found ${tabs.length} open tabs`);
+  console.log(`🔍 Open tabs: ${tabs.length}`);
   
   // Build matching tabs list
   let matchingTabs = [];
   
   for (const urlConfig of urls) {
     const pattern = urlConfig.pattern;
-    console.log(`\nChecking pattern: "${pattern}" (refresh: ${urlConfig.refresh})`);
     
     const matchedTab = tabs.find(tab => {
-      const matches = tab.url.includes(pattern);
-      if (matches) {
-        console.log(`  ✓ MATCH: ${tab.url}`);
-      }
-      return matches;
+      return tab.url && tab.url.includes(pattern);
     });
     
     if (matchedTab) {
@@ -90,36 +120,42 @@ async function rotateTabs() {
         pattern: pattern,
         shouldRefresh: urlConfig.refresh
       });
-    } else {
-      console.log(`  ✗ No match found`);
+      console.log(`✓ Match: "${pattern}" → ${matchedTab.url.substring(0, 50)}...`);
     }
   }
 
-  console.log(`\n📊 Total matching tabs: ${matchingTabs.length}`);
-
   if (matchingTabs.length === 0) {
-    console.log('❌ No matching tabs found!');
+    console.log('⚠️ No matching tabs found');
     return;
   }
 
-  // Rotate
-  currentIndex = currentIndex % matchingTabs.length;
-  const current = matchingTabs[currentIndex];
+  // Get current index from storage
+  const { currentIndex = 0 } = await chrome.storage.local.get('currentIndex');
   
-  console.log(`\n🔄 Switching to: ${current.pattern}`);
-  console.log(`   Tab ID: ${current.tab.id}`);
-  console.log(`   URL: ${current.tab.url}`);
-  console.log(`   Refresh: ${current.shouldRefresh ? 'YES' : 'NO'}`);
+  // Calculate next index
+  const nextIndex = currentIndex % matchingTabs.length;
+  const current = matchingTabs[nextIndex];
   
-  await chrome.tabs.update(current.tab.id, { active: true });
+  console.log(`\n➡️  Rotating to tab ${nextIndex + 1}/${matchingTabs.length}`);
+  console.log(`   Pattern: "${current.pattern}"`);
+  console.log(`   Refresh: ${current.shouldRefresh ? 'YES ♻️' : 'NO'}`);
   
-  if (current.shouldRefresh) {
-    await chrome.tabs.reload(current.tab.id);
-    console.log('✅ TAB REFRESHED');
-  } else {
-    console.log('✅ TAB ACTIVATED (no refresh)');
+  try {
+    await chrome.tabs.update(current.tab.id, { active: true });
+    
+    if (current.shouldRefresh) {
+      await chrome.tabs.reload(current.tab.id);
+      console.log('✅ Tab switched and REFRESHED');
+    } else {
+      console.log('✅ Tab switched (no refresh)');
+    }
+    
+    // Save incremented index for next rotation
+    await chrome.storage.local.set({ currentIndex: nextIndex + 1 });
+    
+  } catch (error) {
+    console.error('❌ Error during rotation:', error);
   }
   
-  currentIndex++;
-  console.log('=== ROTATION END ===\n');
+  console.log('=== END ===\n');
 }

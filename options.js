@@ -1,6 +1,6 @@
 const STORE = {
   enabled: "tr_enabled",
-  intervalSeconds: "tr_interval_s",
+  seconds: "tr_seconds",
   refreshPatterns: "tr_refresh_patterns"
 };
 
@@ -32,7 +32,25 @@ function addUrlField(url = '', shouldRefresh = true) {
 }
 
 function saveSettings() {
-  const interval = Math.max(1, parseInt(document.getElementById('interval').value) || 5);
+  const secondsInput = document.getElementById('seconds');
+  let secondsValue = secondsInput.value.trim();
+  
+  // Parse seconds directly
+  let seconds = parseInt(secondsValue, 10);
+  
+  // Validate and clamp
+  if (isNaN(seconds) || seconds < 1) {
+    alert('Please enter a valid number of seconds (minimum 1 second)');
+    secondsInput.value = 5;
+    return;
+  }
+  
+  if (seconds > 3600) {
+    alert('Maximum is 3600 seconds (1 hour)');
+    seconds = 3600;
+    secondsInput.value = 3600;
+  }
+  
   const enabled = document.getElementById('enabled').checked;
   
   // Collect all URLs and their refresh states
@@ -50,31 +68,45 @@ function saveSettings() {
     }
   });
   
-  console.log('Saving:', { interval, enabled, urls });
-  
-  chrome.storage.sync.set({
-    interval: interval,
+  const settings = {
+    seconds: seconds,  // Direct seconds, no conversion
     enabled: enabled,
     urls: urls
-  }, () => {
-    const status = document.getElementById('status');
-    status.textContent = `Settings saved! (${interval} seconds interval)`;
-    status.style.color = '#28a745';
-    setTimeout(() => {
-      status.textContent = '';
-    }, 2000);
+  };
+  
+  console.log('💾 Saving settings:', settings);
+  
+  chrome.storage.sync.set(settings, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error saving:', chrome.runtime.lastError);
+      const status = document.getElementById('status');
+      status.textContent = '❌ Error saving settings!';
+      status.style.color = '#dc3545';
+    } else {
+      console.log('✅ Settings saved successfully!');
+      const status = document.getElementById('status');
+      status.textContent = `✅ Saved! Switching every ${seconds} seconds`;
+      status.style.color = '#28a745';
+      setTimeout(() => {
+        status.textContent = '';
+      }, 3000);
+    }
   });
 }
 
 function loadSettings() {
-  chrome.storage.sync.get(['interval', 'enabled', 'urls'], (result) => {
-    console.log('Loaded:', result);
+  console.log('📖 Loading settings...');
+  
+  chrome.storage.sync.get(['seconds', 'enabled', 'urls'], (result) => {
+    console.log('📥 Loaded settings:', result);
     
-    document.getElementById('interval').value = result.interval || 5;
+    const seconds = result.seconds || 5;
+    document.getElementById('seconds').value = seconds;
     document.getElementById('enabled').checked = result.enabled || false;
     
     // Clear existing
     document.getElementById('urlList').innerHTML = '';
+    urlCounter = 0;
     
     // Load existing URLs or add one empty field
     if (result.urls && result.urls.length > 0) {
