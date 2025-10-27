@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Tab Rotator Settings</title>
+    <style>
+      body { font: 14px system-ui, sans-serif; margin: 16px; max-width: 800px; }
+      input[type="number"] { width: 6em; }
+      .hint { color: #666; font-size: 12px; }
+      
+      /* URL List Styles */
+      .url-list { margin: 16px 0; }
+      .url-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 8px;
+        background: #f5f5f5;
+        border-radius: 4px;
+      }
+      .url-item input[type="text"] {
+        flex: 1;
+        padding: 6px 8px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      .url-item input[type="checkbox"] {
+        cursor: pointer;
+      }
+      .url-item button {
+        padding: 4px 12px;
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .url-item button:hover {
+        background: #c82333;
+      }
+      
+      #addUrl {
+        padding: 8px 16px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        margin-top: 8px;
+      }
+      #addUrl:hover {
+        background: #218838;
+      }
+      
+      #save {
+        padding: 8px 24px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      #save:hover {
+        background: #0056b3;
+      }
+      
+      label.checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Tab Rotator Settings</h2>
+
+    <label>
+      Interval (seconds, minimum 1):
+      <input id="interval" type="number" min="1" step="1" />
+    </label>
+    <p class="hint">Set rotation interval. For fast rotation, try 5-10 seconds.</p>
+
+    <h3>URLs to Rotate</h3>
+    <p class="hint">Add URLs you want to rotate through. Check the box to enable refresh for each URL.</p>
+    
+    <div id="urlList" class="url-list">
+      <!-- Dynamic URL fields will be added here -->
+    </div>
+    
+    <button id="addUrl">+ Add URL</button>
+
+    <label class="checkbox-label">
+      <input id="enabled" type="checkbox" />
+      <span>Rotation enabled</span>
+    </label>
+
+    <div style="margin-top:16px">
+      <button id="save">Save Settings</button>
+      <span id="status" class="hint"></span>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

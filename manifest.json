@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Rotator (Selective Refresh)",
+  "version": "1.0.0",
+  "description": "Rotate tabs in the current window at a set interval; optionally refresh matching URLs.",
+  "permissions": ["tabs", "storage", "alarms"],
+  "action": { "default_title": "Start/Stop Rotation" },
+  "options_page": "options.html",
+  "background": { "service_worker": "background.js" }
+}
